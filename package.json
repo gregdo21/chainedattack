@@ -1,0 +1,23 @@
+{
+  "name": "chained-attack-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Intentionally vulnerable demo teaching vulnerability chaining. Localhost only. For security education.",
+  "type": "commonjs",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "secure": "cross-env SECURE_MODE=true tsx src/server.ts",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.0",
+    "cross-env": "^7.0.3",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  }
+}

